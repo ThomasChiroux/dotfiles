@@ -107,20 +107,39 @@ jobcount()
     echo -ne "$rep"
 }
 
-######################
-# GIT branch display #
-######################
+#####################
+# HG branch display #
+#####################
 
-# Get the branch name of the current directory
-git_branch()
+hg_branch_color()
 {
-    if git rev-parse --git-dir >/dev/null 2>&1 ; then
-        gitver=$(git branch 2>/dev/null| sed -n '/^\*/s/^\* //p')
+   if hg root >/dev/null 2>&1 ; then
+        red=`tput setaf 1`
+        green=`tput setaf 2`
+        yellow=`tput setaf 3`
+     
+        color=""
+        branch="$(hg branch)"
+        if [ $(hg status --quiet -n | wc -l | sed -e "s/ //g") = 0 ] ; then
+            #has_commit=`git rev-list origin/$branch..$branch`
+            #if [ "$has_commit" != "" ] ; then
+            #    color="${yellow}" # some commits to push
+            #else
+            #    color="${green}" # nothing to commit or push
+            #fi
+            color=""
+        else
+            color="${red}" # changes to commit
+        fi
     else
         return 0
     fi
-    echo -e "$gitver"
+    echo -ne ${color}HG:${branch}
 }
+
+######################
+# GIT branch display #
+######################
 
 # Set a color depending on the branch state:
 # - green if the repository is up to date
@@ -134,8 +153,10 @@ git_branch_color()
         yellow=`tput setaf 3`
      
         color=""
-        if git diff --quiet 2>/dev/null >&2 ; then
-            branch="$(git_branch)"
+        branch=$(git branch 2>/dev/null| sed -n '/^\*/s/^\* //p')
+        #if git diff --quiet 2>/dev/null >&2 ; then
+        if [ $(git status -s --untracked-files=no 2>/dev/null | wc -l | sed -e "s/ //g") = 0 ] ; then
+            #branch="$(git_branch)"
             has_commit=`git rev-list origin/$branch..$branch`
             if [ "$has_commit" != "" ] ; then
                 color="${yellow}" # some commits to push
@@ -148,7 +169,7 @@ git_branch_color()
     else
         return 0
     fi
-    echo -ne $color
+    echo -ne "${color}GIT:${branch}"
 }
 
 
@@ -181,7 +202,7 @@ battery_color()
     bat=$(battery)
     if [ "$bat" != "" ] ; then
         if [ ${bat} -gt 80 ] ; then
-            tput bold ; tput setaf ${gray}
+            tput bold ; tput setaf ${blue}
         elif [ ${bat} -le 80 ] && [ ${bat} -gt 60 ] ; then
             tput bold ; tput setaf ${green}
         elif [ ${bat} -le 60 ] && [ ${bat} -gt 40 ] ; then
@@ -206,10 +227,16 @@ battery_color()
 # Get the load average
 load_out()
 {
-    load=`uptime | sed -e "s/.*load average: \(.*\...\), \(.*\...\), \(.*\...\).*/\1/" -e "s/ //g"`
+    #load=`uptime | sed -e "s/.*load average: \(.*\...\), \(.*\...\), \(.*\...\).*/\1/" -e "s/ //g"`
+    # below macos hack
+    load=`uptime | sed -e "s/.*load averages: \(.*\,..\) \(.*\,..\) \(.*\,..\).*/\1/" -e "s/ //g" -e "s/\,/\./g"`
     tmp=$(echo $load*100 | bc)
+    
     load100=${tmp%.*}
-    if [ ${load100} -gt 50 ] ; then
+    # blow macos hack
+    #load100=${load%.*}
+
+    if [ ${load100} -gt 120 ] ; then
         echo -n $load
     else
         echo -n ""
@@ -241,15 +268,15 @@ load_color()
       tmp=$(echo $load*100 | bc)
       load100=${tmp%.*}
 
-      if [ ${load100} -lt 70 ] ; then
-        tput bold ; tput setaf ${gray}
-      elif [ ${load100} -ge 70 ] && [ ${load100} -lt 120 ] ; then
+      if [ ${load100} -lt 150 ] ; then
+        tput bold ; tput setaf ${blue}
+      elif [ ${load100} -ge 150 ] && [ ${load100} -lt 200 ] ; then
         tput bold ; tput setaf ${green}
-      elif [ ${load100} -ge 120 ] && [ ${load100} -lt 200 ] ; then
+      elif [ ${load100} -ge 200 ] && [ ${load100} -lt 500 ] ; then
         tput bold ; tput setaf ${yellow}
-      elif [ ${load100} -ge 200 ] && [ ${load100} -lt 300 ] ; then
+      elif [ ${load100} -ge 500 ] && [ ${load100} -lt 700 ] ; then
         tput bold ; tput setaf ${red}
-      elif [ ${load100} -ge 300 ] && [ ${load100} -lt 500 ] ; then
+      elif [ ${load100} -ge 700 ] && [ ${load100} -lt 900 ] ; then
         tput setaf ${gray} ; tput setab ${red}
       else
         tput bold ; tput setaf ${white} ; tput setab ${red}
@@ -282,7 +309,10 @@ PS1="$PS1${LIGHT_BLUE}\$(jobcount)${NO_COL}"
 
 if [ $USR = nou_root ] ; then
     # add git branch and status
-    PS1="$PS1 \$(git_branch_color)\$(git_branch)${NO_COL}"
+    #PS1="$PS1\$(git_branch_color)\$(git_branch_text)${NO_COL}"
+    PS1="$PS1\$(git_branch_color)${NO_COL}"
+    # add hg branch and status
+    PS1="$PS1\$(hg_branch_color)${NO_COL}"
 fi
 
 # add prompt mark
@@ -293,7 +323,7 @@ elif [ $USR = u_root ] ; then
 fi
 
 # add battery status
-PS1="\[\$(battery_color)\]\$(battery) ${NO_COL}$PS1"
+#PS1="\[\$(battery_color)\]\$(battery) ${NO_COL}$PS1"
 
 # add colored load average
 PS1="\[\$(load_color)\]\$(load_out)${NO_COL}$PS1"
